@@ -1,0 +1,16 @@
+@description 	：一些开发用到的脚本
+@frist_build 	：2024.10.13
+@Usage 			：详细见下
+@detail			: 
+	1、
+		**name	: Makefile
+		**last	: 2024.10.13
+		**about	: 编译驱动
+	2、
+		**name	: copy_to.sh
+		**last	: 2024.10.13
+		**about	: 用于快速复制当前目录的驱动文件
+	3、
+		**name	: quick_mod_test.sh
+		**last	: 2024.10.13
+		**about	: 一键编译驱动模块，并移动到开发板挂载目录的目标位置

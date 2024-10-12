@@ -1,0 +1,1 @@
+cmd_/home/robert/myWorkspace/driver_practice/led_demo/hello.mod := { echo  /home/robert/myWorkspace/driver_practice/led_demo/hello.o; echo; } > /home/robert/myWorkspace/driver_practice/led_demo/hello.mod

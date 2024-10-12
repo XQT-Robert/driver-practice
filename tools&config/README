@@ -1,0 +1,13 @@
+#该文件夹保存的是开发时，使用到的一些配置，或者工具/脚本
+
+#配置：
+1、
+@name				: vscode_set
+@final_update		: 2024.10.13
+@description		: vscode驱动开发配置信息
+
+#工具/脚本：
+1、
+@name				: script
+@final_update		: 2024.10.13
+@description		: 驱动开发脚本

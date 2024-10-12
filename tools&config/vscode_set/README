@@ -1,0 +1,6 @@
+@description 	：让vscode正确的识别驱动类型开发的代码错误
+@final_update 	：2024.10.13
+@Usage 			：在每个项目目录中添加该.vscode到workspace中.
+@detail			: 
+	1、添加编译驱动所需的驱动源码目录。
+	2、在define中添加"_kernel_",让vscode正确识别驱动代码格式
