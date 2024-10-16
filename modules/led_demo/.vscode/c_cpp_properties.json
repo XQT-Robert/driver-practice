@@ -1,0 +1,23 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/robert/linux/atk-mp1/linux/my_linux/linux-5.4.31/arch/arm/include",
+                 "/home/robert/linux/atk-mp1/linux/my_linux/linux-5.4.31/include",
+                "/home/robert/linux/atk-mp1/linux/my_linux/linux-5.4.31/arch/arm/include/generated"
+
+            ],
+            "defines": [
+                "__KERNEL__",
+                 "MODULE"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

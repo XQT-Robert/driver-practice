@@ -1,1 +1,0 @@
-cmd_/home/robert/myWorkspace/driver_practice/led_demo/led_demo.ko := arm-none-linux-gnueabihf-ld -r -EL --build-id  -T ./scripts/module-common.lds -T ./arch/arm/kernel/module.lds -o /home/robert/myWorkspace/driver_practice/led_demo/led_demo.ko /home/robert/myWorkspace/driver_practice/led_demo/led_demo.o /home/robert/myWorkspace/driver_practice/led_demo/led_demo.mod.o;  true

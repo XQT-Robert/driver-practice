@@ -3,5 +3,11 @@
 		{
 			"path": "."
 		}
-	]
+	],
+	"settings": {
+		"files.associations": {
+			"module.h": "c",
+			"device.h": "c"
+		}
+	}
 }

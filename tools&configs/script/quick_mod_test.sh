@@ -18,14 +18,14 @@ make > /dev/null
 project_name=$(find . -name "*.ko" | sed 's|^\./||' | sed 's|\.ko$||')
 
 # 设置模块路径,这里的路径一定要使用绝对路径,否则sudo或者一些意外情况会导致访问错误
-module_path=/home/robert/linux/nfs/rootfs/lib/modules/5.4.31/driver_test/$project_name/
+module_path=/home/robert/linux/nfs/rootfs/lib/modules/5.4.31/driver_test/$project_name
 
 echo "$project_name"
 echo "$module_path"
 
 # 创建目录并移动模块
-mkdir -p "$module_path"	
-sudo cp "$project_name.ko" "$module_path"
+sudo mkdir -p "$module_path"	
+sudo cp "$project_name.ko" "${module_path}"
 
 # 检查是否有调试 APP 的源文件，并进行编译
 if [ -e "${project_name}_App.c" ]; then 
