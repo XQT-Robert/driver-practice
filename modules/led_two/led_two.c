@@ -162,8 +162,9 @@ static int __init led_init(void)
 
 
 	/* 设备创建 */
-	while(i < 2)
-	{
+	while(i < DEV_MAX_CNT)
+	{	
+		/*	创建设备号、设备名称 */
 		gpioled[i].devid_minor = i;
 		gpioled[i].devid = MKDEV(devid_major, gpioled[i].devid_minor);
 		snprintf(gpioled[i].dev_name, sizeof(gpioled[i].dev_name), "gpioled_dev%d", i);
@@ -250,7 +251,7 @@ free_gpio:
 
 static void __exit led_exit(void)
 {
-	for(i = 0;i < 2; i++)
+	for(i = 0;i < DEV_MAX_CNT; i++)
    {
 		/* 注销字符设备驱动 */
 		cdev_del(&gpioled[i].cdev);/*  删除cdev */
@@ -260,7 +261,7 @@ static void __exit led_exit(void)
    }
 
 	class_destroy(led_class);
-	gpio_free(gpioled[0].led_gpio); /* 释放GPIO */
+	gpio_free(gpioled[0].led_gpio); /* 释放GPIO引脚 */
 
    
 }
