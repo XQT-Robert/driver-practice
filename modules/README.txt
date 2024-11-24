@@ -12,3 +12,10 @@ ledµÆ£¬ÖØÐÂ¸ÄÐ´ÁËÖ®Ç°×Ö·ûÐÍÄ£¿éÖÐ²»Ç¡µ±µÄµØ·½£¬±ÈÈçclass\Ö÷Éè±¸ºÅµÈÍ¬Ò»¸öÇý¶¯ÎÄ¼
 ¸´ÓÃµÄ×ÊÔ´£¬ÏÖÔÚÒÑ¾­´ÓÉè±¸µÄstructÖÐ¶ÀÁ¢ÁË£¬Éè±¸½á¹¹ÖÐ½ö±£ÁôÁËcdev¡¢device¡¢minor
 µÈºÍ¡°Éè±¸¡±Ïà¹ØµÄ±äÁ¿¡£
 
+2¡¢
+@module			: irq_key
+@final_update	: 2024.10.31
+@description	: ÀûÓÃÖÐ¶Ï+¶¨Ê±Æ÷¸ÐÓ¦°´¼ü¡£
+@detail			:	
+	¶Ô×Ö·ûÐÍÄ£¿éµÄ½á¹¹×öÁË½øÒ»²½µÄ·ÖÀë£¬ÏÖÔÚ·ÖÎªÇý¶¯¡¢×Ö·ûÐÍÉè±¸¡¢ÌØ¶¨Éè±¸ÊôÐÔµÈ¸öÈý
+	²¿·Ö¡£ÔÚÄ£¿éInitº¯ÊýÖÐ£¬»ñÈ¡Éè±¸Ê÷ÐÅÏ¢ºÍÉêÇëÖÐ¶ÏºÍgpio×ÓÏµÍ³·ÖÀëÁË£¬½á¹¹¸ü¼ÓÇåÎú¡£

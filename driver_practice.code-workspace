@@ -7,7 +7,11 @@
 	"settings": {
 		"files.associations": {
 			"module.h": "c",
-			"device.h": "c"
+			"device.h": "c",
+			"mutex": "c",
+			"semaphore.h": "c",
+			"map.h": "c",
+			"sched.h": "c"
 		}
 	}
 }
