@@ -32,7 +32,7 @@ fi
 #功能菜单
 case "$1" in
 copy)
-	echo "命令：复制当前模块"
+	echo "复制当前模块"
 	echo "----下面是调用脚本信息："
 	if [ -z "$2" ]; then
     	echo "该命令需要参数$2,请给出新模块名"
@@ -40,10 +40,10 @@ copy)
 	fi
 	./scripts/copy_the_file.sh "$2";;
 make)
-	echo "命令：编译并复制模块文件到挂载目录"
+	echo "编译并复制模块文件到挂载目录"
 	echo "----下面是调用脚本信息："
 	./scripts/make_and_mount.sh;;
 gdb)
-	echo "命令：调试模块"
+	echo "开始调试模块"
 	echo "----下面是调用脚本信息："
 esac

@@ -2,9 +2,13 @@
 
 #
 # @name         ：快速复制模块脚本
-# @Usages       ：./copy_tosh [新建的模块名]
+# @Usages       ：./copy_the_file.sh [新建的模块名]
 # @description  ：
-#   本脚本用于复制当前模块文件，并修改其中 Makefile 以及相关的文件名
+#   本脚本用于复制当前模块文件到文件同路径下，并修改其中 Makefile 以及相关的文件名
+# @configuration：
+#	无须配置
+# @notice  		：
+#   修改相对路径应基于控制脚本ez_control的位置，并在控制脚本所处路径下访问该脚本。
 #---
 
 # 判断是否有参数传递进来
@@ -15,8 +19,9 @@ fi
 
 #-e等符号只能判断单个文件
 if [  -z "$(find . -name '*.ko')" ]; then
-	echo "还没有构造模块，现在构建，quick_mod_test"
-	./quick_mod_test.sh
+	echo "还没有构造测试过模块，模块可能不可用"
+    echo "现在尝试构建，make_and_mount"
+	./script/make_and_mount.sh
 fi
 
 # 获取当前项目名称
@@ -53,8 +58,8 @@ cp Makefile ../$new_project_name/
 # 修改 Makefile 中的目标文件名
 sed -i "s/${old_project_name}.o/${new_project_name}.o/g" ../$new_project_name/Makefile
 
-cp copy_to.sh ../$new_project_name/
-cp quick_mod_test.sh ../$new_project_name/
+cp -r scripts ../$new_project_name/
+cp ez_control.sh ../$new_project_name/
 cp -r .vscode ../$new_project_name/
 cp ${old_project_name}.code-workspace ../$new_project_name/${new_project_name}.code-workspace
 

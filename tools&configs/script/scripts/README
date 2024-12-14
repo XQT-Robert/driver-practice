@@ -1,0 +1,12 @@
+@description 	：一些开发用到的脚本
+@frist_build 	：2024.12.15
+@Usage 			：详细见下
+@detail		    ：
+	1、
+		**name	: copy_the_file.sh
+		**last	: 2024.12.15
+		**about	: 用于快速复制当前目录的驱动文件
+	2、
+		**name	: make_and_mount.sh
+		**last	: 2024.12.15
+		**about	: 一键编译驱动模块，并移动到开发板挂载目录的目标位置

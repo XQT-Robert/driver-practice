@@ -7,10 +7,11 @@
 		**last	: 2024.10.13
 		**about	: 编译驱动
 	2、
-		**name	: copy_to.sh
-		**last	: 2024.10.13
-		**about	: 用于快速复制当前目录的驱动文件
+		**name	: scripts/ez_control.sh
+		**last	: 2024.12.15
+		**about	: 方便开发的脚本，ez_control.sh用于调用scripts中的脚本
+		**Usage	: 把scripts文件夹和ez_control.sh脚本一并复制到驱动模块文件中
 	3、
-		**name	: quick_mod_test.sh
-		**last	: 2024.10.13
-		**about	: 一键编译驱动模块，并移动到开发板挂载目录的目标位置
+		**name	: Possible_mistakes.sh
+		**last	: 2024.12.15
+		**about	: 记录了可能发生的错误
