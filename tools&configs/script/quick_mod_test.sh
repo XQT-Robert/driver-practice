@@ -1,11 +1,16 @@
 #!/bin/bash
 
-# description：
-# 1、编译模块，并移动到挂载目录下
-# 2、如果有对应的调试 APP，自动编译，其命名格式为 (模块名称)_App ，比如 led_App,并复制进模块文件夹
-# 挂载的路径是 ~/linux/nfs/rootfs/lib/modules/5.4.31/driver_test/(模块名称)/
+#
+# @name         ：模块快速编译挂载脚本
+# @Usages       ：./quick_mod_test.sh
+# @description  ：
+#   1、编译模块，并移动到挂载目录下
+#   2、如果有对应的调试 APP，自动编译，其命名格式为 (模块名称)_App ，比如 led_App,并复制进模块文件夹
+#      挂载的路径是 ~/linux/nfs/rootfs/lib/modules/5.4.31/driver_test/(模块名称)/
+#---
 
-#必须要指定环境变量，确保脚本make可以找到
+#必须要指定环境变量，确保脚本make可以找到，推荐使用source来指定当前脚本的环境变量和系统一致
+#使用下面的方法可能会受当前环境变量影响，导致和系统的环境变量不一致的情况下添加环境变量，出现未知错误
 #export PATH=$PATH:/usr/local/arm/gcc-arm-9.2-2019.12-x86_64-arm-none-linux-gnueabihf/bin
 source /etc/profile
 echo "Current PATH: $PATH"
@@ -23,7 +28,6 @@ module_path=/home/robert/linux/nfs/rootfs/lib/modules/5.4.31/driver_test/$projec
 echo "$project_name"
 echo "$module_path"
 
-# 创建目录并移动模块
 sudo mkdir -p "$module_path"	
 sudo cp "$project_name.ko" "${module_path}"
 

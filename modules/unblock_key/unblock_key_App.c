@@ -53,6 +53,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	printf("the fking fd is %d\r\n", fd);
+
 	FD_ZERO(&readfds);
     FD_SET(fd, &readfds);
 

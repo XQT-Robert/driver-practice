@@ -1,6 +1,11 @@
 #!/bin/bash
 
-# 本脚本用于复制当前文件，并修改其中 Makefile 以及相关的文件名
+#
+# @name         ：快速复制模块脚本
+# @Usages       ：./copy_tosh [新建的模块名]
+# @description  ：
+#   本脚本用于复制当前模块文件，并修改其中 Makefile 以及相关的文件名
+#---
 
 # 判断是否有参数传递进来
 if [ -z "$1" ]; then

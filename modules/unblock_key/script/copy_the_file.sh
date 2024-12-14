@@ -1,6 +1,15 @@
 #!/bin/bash
 
-# 本脚本用于复制当前文件，并修改其中 Makefile 以及相关的文件名
+#
+# @name         ：快速复制模块脚本
+# @Usages       ：./copy_the_file.sh [新建的模块名]
+# @description  ：
+#   本脚本用于复制当前模块文件，并修改其中 Makefile 以及相关的文件名
+# @configuration：
+#	使用前需要修改确认你所需的脚本，正常位于路径./script
+# @notice  		：
+#   修改相对路径应基于控制脚本ez_control的位置，并在控制脚本所处路径下访问该脚本。
+#---
 
 # 判断是否有参数传递进来
 if [ -z "$1" ]; then
@@ -8,10 +17,10 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-#-e等文件判断符号只能判断单个文件
+#-e等符号只能判断单个文件
 if [  -z "$(find . -name '*.ko')" ]; then
 	echo "还没有构造模块，现在构建，quick_mod_test"
-	./quick_mod_test.sh
+	./script/quick_mod_test.sh
 fi
 
 # 获取当前项目名称

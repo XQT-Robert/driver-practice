@@ -1,0 +1,12 @@
+#本文档记录使用脚本时可能遇见的错误
+1、
+	**brief		: 
+		在使用脚本时，运行显示信息如下：
+			$ ./quick_mod_test.sh 
+			bash: ./quick_mod_test.sh: /bin/bash^M: bad interpreter: No such file or directory
+
+	**solution	: 
+		出现该情况的潜在原因有两个，1是脚本权限问题，使用chmod添加权限即可；2的情况比较特殊，
+		是因为文件格式问题，在脚本使用的过程中可能意外迁移到了windows环境，造成脚本格式更改，
+		使用vim编辑器打开脚本，输入":set ff"查看当前脚本格式，如果显示fileformat=dos，则有误。
+		更改方法为在vim编辑器下输入":set ff=unix"更改脚本格式，:wq保存退出即可。
