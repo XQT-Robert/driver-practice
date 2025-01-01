@@ -1,5 +1,6 @@
 {
 	"files.associations": {
 		"cdev.h": "c"
-	}
+	},
+	"files.eol": "\n"
 }

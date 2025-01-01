@@ -73,9 +73,8 @@ static struct chr_dev key_dev;
 static struct key_property key_prop;
 struct timer_base key_timer;
 
-
-int count = 0;
-
+unsigned int poll_count = 0;
+unsigned int read_count = 0;
 
 static int key_open(struct inode *inode, struct file *filp)
 {
@@ -95,11 +94,13 @@ static ssize_t key_read(struct file *filp, char __user *buf, size_t cnt, loff_t 
     int ret;
 
 	if (filp->f_flags & O_NONBLOCK) {	// 非阻塞方式访问
+		printk("read_count:%d！\r\n",++read_count);
         if(KEY_KEEP == atomic_read(&key_prop.status))
             return -EAGAIN;
     } 
 	else {							// 阻塞方式访问
    		/* 加入等待队列，当有按键按下或松开动作发生时，才会被唤醒 */
+		printk("sb being block！\r\n");//
 		ret = wait_event_interruptible(key_prop.r_wait, KEY_KEEP != atomic_read(&key_prop.status));
 		if(ret)
 			return ret;
@@ -144,6 +145,8 @@ static unsigned int key_poll(struct file *filp, struct poll_table_struct *wait)
 	unsigned int mask = 0;
 
     poll_wait(filp, &key_prop.r_wait, wait);
+
+	printk("poll_count:%d！\r\n",++poll_count);
 
     if(KEY_KEEP != atomic_read(&key_prop.status))	// 按键按下或松开动作发生
 		mask = POLLIN | POLLRDNORM;	// 返回PLLIN

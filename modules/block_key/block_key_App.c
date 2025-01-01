@@ -33,6 +33,8 @@ int main(int argc, char *argv[])
 	char *filename;
 	int keyvalue;
 	
+	int count = 0;
+
 	if(argc != 2){
 		printf("Error Usage!\r\n");
 		return -1;
@@ -52,6 +54,13 @@ int main(int argc, char *argv[])
 		read(fd, &keyvalue, sizeof(keyvalue));
 		if (0 == keyvalue) {	/* KEY0 */
 			printf("KEY0 Press, value = %#X\r\n", keyvalue);	/* 按下 */
+		}
+		
+		if(100 == count){//检测是否阻塞这里的循环（轮询）
+			printf("fking stop\r\n");
+		}
+		else{
+			printf("polling: %d\r\n", ++count);
 		}
 	}
 
