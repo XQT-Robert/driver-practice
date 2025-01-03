@@ -11,7 +11,9 @@
 			"mutex": "c",
 			"semaphore.h": "c",
 			"map.h": "c",
-			"sched.h": "c"
+			"sched.h": "c",
+			"fcntl.h": "c",
+			"types.h": "c"
 		}
 	}
 }
