@@ -24,7 +24,7 @@
 #include <linux/pid.h>
 
 
-#define MODULE_NAME		"asyn_key" 	/* 模块名称 */
+#define MODULE_NAME		"unblock_key" 	/* 模块名称 */
 #define DEV_MAX_CNT 	 1			/* 驱动最高复用设备数，即挂载/dev/的节点数 */
 
 /* 定义按键状态 */
@@ -42,7 +42,7 @@ int dev_num = 0;					/* 复用当前驱动的设备数，互斥访问 */
 
 
 /* 字符型设备属性 */
-struct chr_base{ 
+struct chr_class{ 
 	dev_t devid;					
 	struct cdev cdev;
 	struct device *device; 
@@ -59,8 +59,8 @@ struct timer_base{
 };
 
 /* 按键属性 */
-struct key_base{
-	struct chr_base parent;			/* 继承字符型设备属性 */
+struct key_class{
+	struct chr_class parent;			/* 继承字符型设备属性 */
 	int key_pin; 
 	int irq_num;					/* 中断号 		*/
 	atomic_t status;   				
@@ -71,9 +71,9 @@ struct key_base{
 	struct fasync_struct *async_queue;	/* fasync_struct结构体 */
 };
 
-static struct key_base key_dev;
-static struct chr_base *pBase_chr_key;		/* 指针_设备父类_所属设备 */
-static struct timer_base *pBase_timer_key;	/* 指针_设备父类_所属设备 */
+static struct key_class key_dev;
+static struct chr_class *p_chr_key;		/* 指针_设备父类_所属设备 */
+static struct timer_base *p_timer_key;	/* 指针_设备父类_所属设备 */
 
 
 static int key_open(struct inode *inode, struct file *filp)
@@ -181,11 +181,11 @@ static struct file_operations key_fops = {
 static irqreturn_t key_irq_callback(int irq, void *dev_id)
 {
 	/* 按键防抖处理，开启定时器延时15ms */
-	mod_timer(&pBase_timer_key->timer, jiffies + msecs_to_jiffies(15));
+	mod_timer(&p_timer_key->timer, jiffies + msecs_to_jiffies(15));
     return IRQ_HANDLED;
 }
 
-static void pBase_timer_key_irq_callback(struct timer_list *arg)
+static void p_timer_key_irq_callback(struct timer_list *arg)
 {
     static int last_val = 1;
     int current_val;
@@ -258,7 +258,7 @@ static int key_dev_init(void)
 	}
 	
 	/* 将父类指针指向设备父类属性方便访问 */
-	pBase_timer_key = &key_dev.timer;
+	p_timer_key = &key_dev.timer;
 
 	/* 初始化等待队列头 */
 	init_waitqueue_head(&key_dev.r_wait);
@@ -267,7 +267,7 @@ static int key_dev_init(void)
 	atomic_set(&key_dev.status, KEY_KEEP);
 
 	/* 6、初始化timer，设置定时器处理函数,还未设置周期，所有不会激活定时器 */
-	timer_setup(&pBase_timer_key->timer, pBase_timer_key_irq_callback, 0);
+	timer_setup(&p_timer_key->timer, p_timer_key_irq_callback, 0);
 
 	return 0;
 }
@@ -279,17 +279,17 @@ static int parse_devtree(void)
 	const char *str;
 
 	/* 将父类指针指向设备父类属性方便访问 */
-	pBase_chr_key = &key_dev.parent;	
+	p_chr_key = &key_dev.parent;	
 
 	/* 1、find dev node */
-	pBase_chr_key->nd = of_find_node_by_path("/key");
-	if(pBase_chr_key->nd == NULL ){
+	p_chr_key->nd = of_find_node_by_path("/key");
+	if(p_chr_key->nd == NULL ){
 		printk("key node nost find!\r\n");
 		return -EINVAL;
 	}
 
 	/* 2、status */
-	ret = of_property_read_string(pBase_chr_key->nd,"status",&str);
+	ret = of_property_read_string(p_chr_key->nd,"status",&str);
 	if(ret < 0){
 		printk("key: Failed to get status property\n");
 		return -EINVAL;
@@ -299,7 +299,7 @@ static int parse_devtree(void)
         return -EINVAL;
 
 	/* 3、 compatible */
-	ret = of_property_read_string(pBase_chr_key->nd,"compatible",&str);
+	ret = of_property_read_string(p_chr_key->nd,"compatible",&str);
 	if(ret < 0){
 		printk("key: Failed to get compatible property\n");
 		return -EINVAL;
@@ -311,14 +311,14 @@ static int parse_devtree(void)
 	}
         
 	/* 4、 get pin */
-	key_dev.key_pin = of_get_named_gpio(pBase_chr_key->nd, "key-pin", 0);
+	key_dev.key_pin = of_get_named_gpio(p_chr_key->nd, "key-pin", 0);
 	if(key_dev.key_pin < 0) {
 		printk("can't get key-pin");
 		return -EINVAL;
 	}
 
 	/* 5 、获取GPIO对应的中断号 */
-    key_dev.irq_num = irq_of_parse_and_map(pBase_chr_key->nd, 0);
+    key_dev.irq_num = irq_of_parse_and_map(p_chr_key->nd, 0);
     if(!key_dev.irq_num){
         return -EINVAL;
     }
@@ -371,37 +371,37 @@ static int __init chr_dev_init(void)
 		goto destroy_class;
 	}
 
-	//pBase_chr_key.dev_prop = &key_dev; 	
+	//p_chr_key.dev_prop = &key_dev; 	
 
 	/* 初始化第一个设备信息 */
-	pBase_chr_key->devid_minor = 0;
-	pBase_chr_key->devid = MKDEV(devid_major, pBase_chr_key->devid_minor);
-	snprintf(pBase_chr_key->dev_name, sizeof(pBase_chr_key->dev_name), "key");
+	p_chr_key->devid_minor = 0;
+	p_chr_key->devid = MKDEV(devid_major, p_chr_key->devid_minor);
+	snprintf(p_chr_key->dev_name, sizeof(p_chr_key->dev_name), "key");
 
-	pBase_chr_key->cdev.owner = THIS_MODULE;
-	cdev_init(&pBase_chr_key->cdev, &key_fops);
+	p_chr_key->cdev.owner = THIS_MODULE;
+	cdev_init(&p_chr_key->cdev, &key_fops);
 	
-	ret = cdev_add(&pBase_chr_key->cdev, pBase_chr_key->devid, DEV_MAX_CNT);
+	ret = cdev_add(&p_chr_key->cdev, p_chr_key->devid, DEV_MAX_CNT);
 	if(ret < 0)
 		goto free_prop;
 		
-	pBase_chr_key->device = device_create(key_class, NULL, pBase_chr_key->devid, NULL, pBase_chr_key->dev_name);
-	if (IS_ERR(pBase_chr_key->device)) {
+	p_chr_key->device = device_create(key_class, NULL, p_chr_key->devid, NULL, p_chr_key->dev_name);
+	if (IS_ERR(p_chr_key->device)) {
 		goto del_cdev;
 	}
 	
 	return 0;
 
 del_cdev:
-	cdev_del(&pBase_chr_key->cdev);
+	cdev_del(&p_chr_key->cdev);
 free_prop:
 	free_irq(key_dev.irq_num, NULL);
 	gpio_free(key_dev.key_pin);
-	del_timer_sync(&pBase_timer_key->timer);		/* 删除timer */
+	del_timer_sync(&p_timer_key->timer);		/* 删除timer */
 destroy_class:
 	class_destroy(key_class);
 del_unregister:
-	unregister_chrdev_region(pBase_chr_key->devid, DEV_MAX_CNT);
+	unregister_chrdev_region(p_chr_key->devid, DEV_MAX_CNT);
 
 	return -EIO;
 }
@@ -409,16 +409,16 @@ del_unregister:
 static void __exit chr_dev_exit(void)
 {
 	/* 注销字符设备驱动 */
-	cdev_del(&pBase_chr_key->cdev);/*  删除cdev */
-	unregister_chrdev_region(pBase_chr_key->devid, DEV_MAX_CNT); /* 注销设备号 */
+	cdev_del(&p_chr_key->cdev);/*  删除cdev */
+	unregister_chrdev_region(p_chr_key->devid, DEV_MAX_CNT); /* 注销设备号 */
 
-	device_destroy(key_class, pBase_chr_key->devid);
+	device_destroy(key_class, p_chr_key->devid);
 	class_destroy(key_class);
 
 	free_irq(key_dev.irq_num, NULL);	/* 释放中断 */
 	gpio_free(key_dev.key_pin); /* 释放GPIO */
 
-	del_timer_sync(&pBase_timer_key->timer);		/* 删除timer */
+	del_timer_sync(&p_timer_key->timer);		/* 删除timer */
 }
 
 module_init(chr_dev_init);

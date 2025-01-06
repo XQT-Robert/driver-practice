@@ -3,8 +3,7 @@ EXTRA_CFLAGS += -DMODULE -D__KERNEL__ -DMODVERSIONS
 
 CURRENT_PATH := $(shell pwd)
 
-obj-m := platform.o
-obj-m += platform_device.o
+obj-m := dts_platform.o
 
 build: kernel_modules
 

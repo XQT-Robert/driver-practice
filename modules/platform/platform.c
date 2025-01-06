@@ -19,30 +19,46 @@
 #include <linux/irq.h>
 #include <linux/poll.h>
 #include <linux/fcntl.h>
+#include <linux/platform_device.h>
 
 #include <linux/sched.h>
 #include <linux/pid.h>
 
+/**
+ * @brief:模块需要修改的内容简介
+ * @include：
+ * 		 |  修改名称  | 类型 |    作用		|	
+ * 		1、MODULE_NAME 	宏 		模块名称
+ * 		2、DEV_MAX_CNT 	宏 		设备数
+ * 		3、struct class	类 		设备类型
+ */
 
-#define MODULE_NAME		"unblock_key" 	/* 模块名称 */
+#define MODULE_NAME		"unblock_led" 	/* 模块名称 */
 #define DEV_MAX_CNT 	 1			/* 驱动最高复用设备数，即挂载/dev/的节点数 */
 
+/* 映射后的寄存器虚拟地址指针 */
+static void __iomem *MPU_AHB4_PERIPH_RCC_PI;
+static void __iomem *GPIOI_MODER_PI;
+static void __iomem *GPIOI_OTYPER_PI;
+static void __iomem *GPIOI_OSPEEDR_PI;
+static void __iomem *GPIOI_PUPDR_PI;
+static void __iomem *GPIOI_BSRR_PI;
+
 /* 定义按键状态 */
-enum key_status {
-    KEY_PRESS = 0,      /* 按键按下 */ 
-    KEY_RELEASE,        /* 按键松开 */ 
-    KEY_KEEP,           /* 按键状态保持 */ 
+enum led_status {
+    LED_ON = 0,    
+    LED_OFF,      
 };
 
 /* 驱动全局属性 */
-struct class *key_class; 			/* 表示当前驱动代表的类型，可复用只创建一个 */
+struct class *led_class; 			/* 表示当前驱动代表的类型，可复用只创建一个 */
 dev_t module_devid;					/* 驱动模块的设备号，即第一个设备的设备号 */
 int devid_major;					
 int dev_num = 0;					/* 复用当前驱动的设备数，互斥访问 */
 
 
 /* 字符型设备属性 */
-struct chr_class{ 
+struct chr_base{ 
 	dev_t devid;					
 	struct cdev cdev;
 	struct device *device; 
@@ -51,67 +67,59 @@ struct chr_class{
 	char dev_name[20]; 				/* /dev/下挂载的设备名称 */
 };
 
-/* 时钟结构 */
-struct timer_base{
-	struct timer_list timer;		
-	int timeperiod; 				/* 定时周期,单位为ms */
-	spinlock_t timer_spinlock;		
-};
-
 /* 按键属性 */
-struct key_class{
-	struct chr_class parent;			/* 继承字符型设备属性 */
-	int key_pin; 
-	int irq_num;					/* 中断号 		*/
+struct led_base{
+	struct chr_base parent;			/* 继承字符型设备属性 */
+	int led_pin; 
 	atomic_t status;   				
-	struct timer_base timer;	
-
-
-	wait_queue_head_t r_wait;	/* 读等待队列头 */
-	struct fasync_struct *async_queue;	/* fasync_struct结构体 */
+	
 };
 
-static struct key_class key_dev;
-static struct chr_class *p_chr_key;		/* 指针_设备父类_所属设备 */
-static struct timer_base *p_timer_key;	/* 指针_设备父类_所属设备 */
+
+static struct led_base led_dev;	//led使用最简单的字符型即可
+static struct chr_base *pBase_chr_led;		/* 指针目标_设备父类_所属设备 */
+
+/*
+ * @description		: LED打开/关闭
+ * @param - sta 	: LEDON(0) 打开LED，LEDOFF(1) 关闭LED
+ * @return 			: 无
+ */
+void led_switch(u8 sta)
+{
+	u32 val = 0;
+	if(sta == LED_ON) {
+		val = readl(GPIOI_BSRR_PI);
+		val |= (1 << 16);	
+		writel(val, GPIOI_BSRR_PI);
+	}else if(sta == LED_OFF) {
+		val = readl(GPIOI_BSRR_PI);
+		val|= (1 << 0);	
+		writel(val, GPIOI_BSRR_PI);
+	}	
+}
+
+/*
+ * @description		: 取消映射
+ * @return 			: 无
+ */
+void led_unmap(void)
+{
+		/* 取消映射 */
+	iounmap(MPU_AHB4_PERIPH_RCC_PI);
+	iounmap(GPIOI_MODER_PI);
+	iounmap(GPIOI_OTYPER_PI);
+	iounmap(GPIOI_OSPEEDR_PI);
+	iounmap(GPIOI_PUPDR_PI);
+	iounmap(GPIOI_BSRR_PI);
+}
 
 
-static int key_open(struct inode *inode, struct file *filp)
+
+static int led_open(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
 
-/*
- * @description		: 从设备读取数据 
- * @param - filp 	: 要打开的设备文件(文件描述符)
- * @param - buf 	: 返回给用户空间的数据缓冲区
- * @param - cnt 	: 要读取的数据长度
- * @param - offt 	: 相对于文件首地址的偏移
- * @return 			: 读取的字节数，如果为负值，表示读取失败
- */
-static ssize_t key_read(struct file *filp, char __user *buf, size_t cnt, loff_t *offt)
-{
-    int ret;
-
-	if (filp->f_flags & O_NONBLOCK) {	// 非阻塞方式访问
-        if(KEY_KEEP == atomic_read(&key_dev.status))
-            return -EAGAIN;
-    } 
-	else {							// 阻塞方式访问
-   		/* 加入等待队列，当有按键按下或松开动作发生时，才会被唤醒 */
-		ret = wait_event_interruptible(key_dev.r_wait, KEY_KEEP != atomic_read(&key_dev.status));
-		if(ret)
-			return ret;
-	}
-    /* 将按键状态信息发送给应用程序 */
-    ret = copy_to_user(buf, &key_dev.status, sizeof(int));
-	
-    /* 状态重置 */
-    atomic_set(&key_dev.status, KEY_KEEP);
-
-
-    return ret;
-}
 
 /*
  * @description		: 向设备写数据 
@@ -121,222 +129,107 @@ static ssize_t key_read(struct file *filp, char __user *buf, size_t cnt, loff_t 
  * @param - offt 	: 相对于文件首地址的偏移
  * @return 			: 写入的字节数，如果为负值，表示写入失败
  */
-static ssize_t key_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt)
+static ssize_t led_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt)
 {
+	int retvalue;
+	unsigned char databuf[1];
+	unsigned char ledstat;
+	
+	retvalue = copy_from_user(databuf, buf, cnt);
+	if(retvalue < 0) {
+		printk("kernel write failed!\r\n");
+		return -EFAULT;
+	}
+
+	ledstat = databuf[0];		/* 获取状态值 */
+	if(ledstat == LED_ON) {
+		led_switch(LED_ON);		/* 打开LED灯 */
+	}else if(ledstat == LED_OFF) {
+		led_switch(LED_OFF);	/* 关闭LED灯 */
+	}
+
 	return 0;
 }
 
-/*
- * @description     : poll函数，用于处理非阻塞访问
- * @param - filp    : 要打开的设备文件(文件描述符)
- * @param - wait    : 等待列表(poll_table)
- * @return          : 设备或者资源状态，
- */
-static unsigned int key_poll(struct file *filp, struct poll_table_struct *wait)
-{
-	unsigned int mask = 0;
-
-    poll_wait(filp, &key_dev.r_wait, wait);
-
-    if(KEY_KEEP != atomic_read(&key_dev.status))	// 按键按下或松开动作发生
-		mask = POLLIN | POLLRDNORM;	// 返回PLLIN
-
-    return mask;
-}
-
- /** 
-  * @description	: fasync函数，用于处理异步通知
-  * @param – fd		: 文件描述符
-  * @param – filp	: 要打开的设备文件(文件描述符)
-  * @param – on		: 模式
-  * @return			: 负数表示函数执行失败
-  */
-static int key_fasync(int fd, struct file *filp, int on)
-{
-	return fasync_helper(fd, filp, on, &key_dev.async_queue);
-}
-
-/*
- * @description		: 关闭/释放设备
- * @param - filp 	: 要关闭的设备文件(文件描述符)
- * @return 			: 0 成功;其他 失败
- */
-static int key_release(struct inode *inode, struct file *filp)
-{
-	return key_fasync(-1, filp, 0);
-}
-
-
-static struct file_operations key_fops = {
+static struct file_operations led_fops = {
 	.owner = THIS_MODULE,
-	.open = key_open,
-	.release = key_release,
-	.write = key_write,
-	.read = key_read,
-	.poll = key_poll,
-	.fasync	= key_fasync,
+	.write = led_write,
+	.open = led_open,
 };
+/*
+ * @description		: platform驱动的probe函数，当驱动与设备匹配以后此函数就会执行
+ * @param - dev 	: platform设备
+ * @return 			: 0，成功;其他负值,失败
+ */
+static int led_probe(struct platform_device *dev)
+{	
+	int i = 0, ret;
+	int ressize[6];
+	u32 val = 0;
+	struct resource *ledsource[6];
 
-/* 中断返回 */
-static irqreturn_t key_irq_callback(int irq, void *dev_id)
-{
-	/* 按键防抖处理，开启定时器延时15ms */
-	mod_timer(&p_timer_key->timer, jiffies + msecs_to_jiffies(15));
-    return IRQ_HANDLED;
-}
-
-static void p_timer_key_irq_callback(struct timer_list *arg)
-{
-    static int last_val = 1;
-    int current_val;
-
-    /* 读取按键值并判断按键当前状态 */
-    current_val = gpio_get_value(key_dev.key_pin);
-    if (0 == current_val && last_val){    		/* 按下 */ 
-		atomic_set(&key_dev.status, KEY_PRESS);
-		wake_up_interruptible(&key_dev.r_wait);	// 唤醒r_wait队列头中的所有队列
-
-		/* 利用信号机制异步通知 */
-		if(key_dev.async_queue)
-			kill_fasync(&key_dev.async_queue, SIGIO, POLL_IN);
+	printk("led driver and device has matched!\r\n");
+	/* 1、获取资源 */
+	for (i = 0; i < 6; i++) {
+		ledsource[i] = platform_get_resource(dev, IORESOURCE_MEM, i); /* 依次MEM类型资源 */
+		if (!ledsource[i]) {
+			dev_err(&dev->dev, "No MEM resource for always on\n");
+			return -ENXIO;
+		}
+		ressize[i] = resource_size(ledsource[i]);	
 	}	
-    else if (1 == current_val && !last_val){	/* 松开 */ 
-		atomic_set(&key_dev.status, KEY_RELEASE);
-		wake_up_interruptible(&key_dev.r_wait);	// 唤醒r_wait队列头中的所有队列
 
-		/* 利用信号机制异步通知 */
-		if(key_dev.async_queue)
-			kill_fasync(&key_dev.async_queue, SIGIO, POLL_IN);
-	} 			
-    else{										/* 状态保持 */ 
-		atomic_set(&key_dev.status, KEY_KEEP);
-	}       	
-
-    last_val = current_val;
-
-}
-
-static int key_gpio_init(void)
-{
-	int ret;
-	unsigned long irq_flags;
-
-	/* 5.向gpio子系统申请使用GPIO */
-	ret = gpio_request(key_dev.key_pin, "key0");
-    if (ret) {
-        printk(KERN_ERR "key: Failed to request key-pin\n");
-        return ret;
-	}
-
-	gpio_direction_input(key_dev.key_pin);
+	/* 2、初始化LED */
+	/* 寄存器地址映射 */
+ 	MPU_AHB4_PERIPH_RCC_PI = ioremap(ledsource[0]->start, ressize[0]);
+	GPIOI_MODER_PI = ioremap(ledsource[1]->start, ressize[1]);
+  	GPIOI_OTYPER_PI = ioremap(ledsource[2]->start, ressize[2]);
+	GPIOI_OSPEEDR_PI = ioremap(ledsource[3]->start, ressize[3]);
+	GPIOI_PUPDR_PI = ioremap(ledsource[4]->start, ressize[4]);
+	GPIOI_BSRR_PI = ioremap(ledsource[5]->start, ressize[5]);
 	
-	/* 获取设备树中指定的中断触发类型 */
-	irq_flags = irq_get_trigger_type(key_dev.irq_num);
-	if (IRQF_TRIGGER_NONE == irq_flags)
-		irq_flags = IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING;
-		
-	/* 申请中断 */
-	ret = request_irq(key_dev.irq_num, key_irq_callback, irq_flags, "Key0_IRQ", NULL);
-	if (ret) {
-        gpio_free(key_dev.key_pin);
-        return ret;
-    }
+	/* 3、使能PI时钟 */
+    val = readl(MPU_AHB4_PERIPH_RCC_PI);
+    val &= ~(0X1 << 8); /* 清除以前的设置 */
+    val |= (0X1 << 8);  /* 设置新值 */
+    writel(val, MPU_AHB4_PERIPH_RCC_PI);
 
-	return 0;
-}
+    /* 4、设置PI0通用的输出模式。*/
+    val = readl(GPIOI_MODER_PI);
+    val &= ~(0X3 << 0); /* bit0:1清零 */
+    val |= (0X1 << 0);  /* bit0:1设置01 */
+    writel(val, GPIOI_MODER_PI);
 
-/* 设备属性初始化 */
-static int key_dev_init(void)
-{
-	int ret;
+    /* 5、设置PI0为推挽模式。*/
+    val = readl(GPIOI_OTYPER_PI);
+    val &= ~(0X1 << 0); /* bit0清零，设置为上拉*/
+    writel(val, GPIOI_OTYPER_PI);
 
-	ret = key_gpio_init();
-	if(ret){
-		free_irq(key_dev.irq_num, NULL);
-		gpio_free(key_dev.key_pin);
-		return ret;
-	}
+    /* 6、设置PI0为高速。*/
+    val = readl(GPIOI_OSPEEDR_PI);
+    val &= ~(0X3 << 0); /* bit0:1 清零 */
+    val |= (0x2 << 0); /* bit0:1 设置为10*/
+    writel(val, GPIOI_OSPEEDR_PI);
+
+    /* 7、设置PI0为上拉。*/
+    val = readl(GPIOI_PUPDR_PI);
+    val &= ~(0X3 << 0); /* bit0:1 清零*/
+    val |= (0x1 << 0); /*bit0:1 设置为01*/
+    writel(val,GPIOI_PUPDR_PI);
+
+    /* 8、默认关闭LED */
+    val = readl(GPIOI_BSRR_PI);
+    val |= (0x1 << 0);
+    writel(val, GPIOI_BSRR_PI);
 	
-	/* 将父类指针指向设备父类属性方便访问 */
-	p_timer_key = &key_dev.timer;
-
-	/* 初始化等待队列头 */
-	init_waitqueue_head(&key_dev.r_wait);
-
-	/* 初始化按键状态 */
-	atomic_set(&key_dev.status, KEY_KEEP);
-
-	/* 6、初始化timer，设置定时器处理函数,还未设置周期，所有不会激活定时器 */
-	timer_setup(&p_timer_key->timer, p_timer_key_irq_callback, 0);
-
-	return 0;
-}
-
-
-static int parse_devtree(void)
-{
-	int ret;
-	const char *str;
-
-	/* 将父类指针指向设备父类属性方便访问 */
-	p_chr_key = &key_dev.parent;	
-
-	/* 1、find dev node */
-	p_chr_key->nd = of_find_node_by_path("/key");
-	if(p_chr_key->nd == NULL ){
-		printk("key node nost find!\r\n");
-		return -EINVAL;
-	}
-
-	/* 2、status */
-	ret = of_property_read_string(p_chr_key->nd,"status",&str);
-	if(ret < 0){
-		printk("key: Failed to get status property\n");
-		return -EINVAL;
-	} 
-
-	if (strcmp(str, "okay"))
-        return -EINVAL;
-
-	/* 3、 compatible */
-	ret = of_property_read_string(p_chr_key->nd,"compatible",&str);
-	if(ret < 0){
-		printk("key: Failed to get compatible property\n");
-		return -EINVAL;
-	} 
-
-	if (strcmp(str, "robert,key")){
-		 printk("keydev: Compatible match failed\n");
-		 return -EINVAL;
-	}
-        
-	/* 4、 get pin */
-	key_dev.key_pin = of_get_named_gpio(p_chr_key->nd, "key-pin", 0);
-	if(key_dev.key_pin < 0) {
-		printk("can't get key-pin");
-		return -EINVAL;
-	}
-
-	/* 5 、获取GPIO对应的中断号 */
-    key_dev.irq_num = irq_of_parse_and_map(p_chr_key->nd, 0);
-    if(!key_dev.irq_num){
-        return -EINVAL;
-    }
-	printk("key-pin num = %d\r\n", key_dev.key_pin);
-
-	return 0;
-}
-
-static int __init chr_dev_init(void)
-{
-	int ret = 0;
-	
+	/* 注册字符设备驱动 */
+	/* 1、申请设备号 */
 	if (devid_major) {		/*  定义了设备号 */
 		module_devid = MKDEV(devid_major, 0); /* 从0开始 */
 		ret = register_chrdev_region(module_devid,DEV_MAX_CNT, MODULE_NAME);
 		if(ret < 0) {
 			pr_err("cannot register %s char driver [ret=%d]\n",MODULE_NAME, 1);
-			
+			goto fail_map;
 			/* 该设备号已经使用，返回设备忙*/
 			return -EBUSY;
 		}
@@ -344,7 +237,7 @@ static int __init chr_dev_init(void)
 		ret = alloc_chrdev_region(&module_devid, 0,DEV_MAX_CNT, MODULE_NAME);	
 		if(ret < 0) {
 			pr_err("%s Couldn't alloc_chrdev_region, ret=%d\r\n", MODULE_NAME, ret);
-			
+			goto fail_map;
 			/* 动态分配设备号失败，超出内存范围*/
 			return -ENOMEM;
 		}
@@ -352,73 +245,76 @@ static int __init chr_dev_init(void)
 	}
 	printk("devid_major=%d\r\n",devid_major);	
 
-	key_class = class_create(THIS_MODULE, MODULE_NAME);
-	if (IS_ERR(key_class)) {
+	led_class = class_create(THIS_MODULE, MODULE_NAME);
+	if (IS_ERR(led_class)) {
 		goto del_unregister;
 	}
-
-	/* 绑定设备信息，仅在绑定成功后初始化设备 */
-	ret = parse_devtree();
-	if(ret < 0){
-		pr_err("%s Couldn't parse dev-tree, ret=%d\r\n", MODULE_NAME, ret);
-		goto destroy_class;
-	}
-
-	/* 绑定并初始化特定设备属性 */
-	ret = key_dev_init();
-	if(ret < 0){
-		pr_err("%s Couldn't init property, ret=%d\r\n", MODULE_NAME, ret);
-		goto destroy_class;
-	}
-
-	//p_chr_key.dev_prop = &key_dev; 	
-
-	/* 初始化第一个设备信息 */
-	p_chr_key->devid_minor = 0;
-	p_chr_key->devid = MKDEV(devid_major, p_chr_key->devid_minor);
-	snprintf(p_chr_key->dev_name, sizeof(p_chr_key->dev_name), "key");
-
-	p_chr_key->cdev.owner = THIS_MODULE;
-	cdev_init(&p_chr_key->cdev, &key_fops);
 	
-	ret = cdev_add(&p_chr_key->cdev, p_chr_key->devid, DEV_MAX_CNT);
+	pBase_chr_led = &led_dev.parent;
+	/* 初始化第一个设备信息 */
+	pBase_chr_led->devid_minor = 0;
+	pBase_chr_led->devid = MKDEV(devid_major, pBase_chr_led->devid_minor);
+	snprintf(pBase_chr_led->dev_name, sizeof(pBase_chr_led->dev_name), "led");
+
+	pBase_chr_led->cdev.owner = THIS_MODULE;
+	cdev_init(&pBase_chr_led->cdev, &led_fops);
+	
+	ret = cdev_add(&pBase_chr_led->cdev, pBase_chr_led->devid, DEV_MAX_CNT);
 	if(ret < 0)
-		goto free_prop;
+		goto destroy_class;
 		
-	p_chr_key->device = device_create(key_class, NULL, p_chr_key->devid, NULL, p_chr_key->dev_name);
-	if (IS_ERR(p_chr_key->device)) {
+	pBase_chr_led->device = device_create(led_class, NULL, pBase_chr_led->devid, NULL, pBase_chr_led->dev_name);
+	if (IS_ERR(pBase_chr_led->device)) {
 		goto del_cdev;
 	}
-	
+
 	return 0;
-
+	
 del_cdev:
-	cdev_del(&p_chr_key->cdev);
-free_prop:
-	free_irq(key_dev.irq_num, NULL);
-	gpio_free(key_dev.key_pin);
-	del_timer_sync(&p_timer_key->timer);		/* 删除timer */
+	cdev_del(&pBase_chr_led->cdev);
 destroy_class:
-	class_destroy(key_class);
+	class_destroy(led_class);
 del_unregister:
-	unregister_chrdev_region(p_chr_key->devid, DEV_MAX_CNT);
-
+	unregister_chrdev_region(pBase_chr_led->devid, DEV_MAX_CNT);
+fail_map:
+	led_unmap();
 	return -EIO;
+}
+
+/*
+ * @description		: platform驱动的remove函数，移除platform驱动的时候此函数会执行
+ * @param - dev 	: platform设备
+ * @return 			: 0，成功;其他负值,失败
+ */
+static int led_remove(struct platform_device *dev)
+{
+	led_unmap();	/* 取消映射 */
+		/* 注销字符设备驱动 */
+	cdev_del(&pBase_chr_led->cdev);/*  删除cdev */
+	unregister_chrdev_region(pBase_chr_led->devid, DEV_MAX_CNT); /* 注销设备号 */
+	device_destroy(led_class, pBase_chr_led->devid);
+	class_destroy(led_class);
+	return 0;
+}
+
+/* platform驱动结构体 */
+static struct platform_driver led_driver = {
+	.driver		= {
+		.name	= "stm32mp1-led",			/* 驱动名字，用于和设备匹配 */
+	},
+	.probe		= led_probe,
+	.remove		= led_remove,
+};
+
+
+static int __init chr_dev_init(void)
+{
+	return platform_driver_register(&led_driver);
 }
 
 static void __exit chr_dev_exit(void)
 {
-	/* 注销字符设备驱动 */
-	cdev_del(&p_chr_key->cdev);/*  删除cdev */
-	unregister_chrdev_region(p_chr_key->devid, DEV_MAX_CNT); /* 注销设备号 */
-
-	device_destroy(key_class, p_chr_key->devid);
-	class_destroy(key_class);
-
-	free_irq(key_dev.irq_num, NULL);	/* 释放中断 */
-	gpio_free(key_dev.key_pin); /* 释放GPIO */
-
-	del_timer_sync(&p_timer_key->timer);		/* 删除timer */
+	platform_driver_unregister(&led_driver);
 }
 
 module_init(chr_dev_init);
