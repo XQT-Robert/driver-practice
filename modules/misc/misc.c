@@ -17,9 +17,8 @@
  * 
  * 	|  修改名称  	  | 类型 	|    作用		|	所属   			|		个数  		|
  * 	1、MODULE_NAME 		宏 			模块名称		NULL					1
- * 	2、DEV_MAX_CNT 		宏 			设备数			NULL					1
- * 	3、struct class		结构 		设备类型		NULL					1
- * 	4、dev_name			char		设备名称	    struct char_base		若干
+ * 	2、DEVICE_NAME 		宏 			设备名			NULL					1
+ * 	3、MISCBEEP_MINOR	宏 			子设备号		NULL					1
  * ------------		
  * 
  */
@@ -45,63 +44,31 @@
 #include <linux/poll.h>
 #include <linux/fcntl.h>
 #include <linux/platform_device.h>
+#include <linux/miscdevice.h>
 
 #include <linux/sched.h>
 #include <linux/pid.h>
 
-#define MODULE_NAME		"platform_led" 	/* 模块名称 */
-#define DEV_MAX_CNT 	 1			/* 驱动最高复用设备数，即挂载/dev/的节点数 */
+#define MODULE_NAME			"misc_beep" /* 模块名称 */
+#define DEVICE_NAME			"misc_beep_dev" /* 设备名称 */
+#define MISCBEEP_MINOR		144			/* 子设备号 */
 
 /* 定义按键状态 */
-enum led_status {
-    LED_ON = 0,    
-    LED_OFF,      
-};
-
-/* 驱动全局属性 */
-struct class *led_class; 			/* 表示当前驱动代表的类型，可复用只创建一个 */
-dev_t module_devid;					/* 驱动模块的设备号，即第一个设备的设备号 */
-int devid_major;					
-int dev_num = 0;					/* 复用当前驱动的设备数，互斥访问 */
-
-
-/* 字符型设备属性 */
-struct chr_base{ 
-	dev_t devid;					
-	struct cdev cdev;
-	struct device *device; 
-	int devid_minor;				
-	struct device_node *nd; 		
-	char dev_name[20]; 				/* /dev/下挂载的设备名称 */
+enum beep_status {
+    BEEP_ON = 0,    
+    BEEP_OFF,      
 };
 
 /* 按键属性 */
-struct led_base{
-	struct chr_base parent;			/* 继承字符型设备属性 */
-	int led_pin;  				
+struct beep_base{
+	struct miscdevice misc ;
+	int beep_pin;  				
 	
 };
 
+static struct beep_base beep_dev;	//beep使用最简单的字符型即可
 
-static struct led_base led_dev;	//led使用最简单的字符型即可
-static struct chr_base *pBase_chr_led;		/* 指针目标_设备父类_所属设备 */
-
-/*
- * @description		: LED打开/关闭
- * @param - sta 	: LEDON(0) 打开LED，LEDOFF(1) 关闭LED
- * @return 			: 无
- */
-void led_switch(u8 sta)
-{
-if (sta == LED_ON )
-		gpio_set_value(led_dev.led_pin, 0);
-	else if (sta == LED_OFF)
-		gpio_set_value(led_dev.led_pin, 1);	
-}
-
-
-
-static int led_open(struct inode *inode, struct file *filp)
+static int beep_open(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
@@ -115,84 +82,108 @@ static int led_open(struct inode *inode, struct file *filp)
  * @param - offt 	: 相对于文件首地址的偏移
  * @return 			: 写入的字节数，如果为负值，表示写入失败
  */
-static ssize_t led_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt)
+static ssize_t beep_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt)
 {
 	int retvalue;
 	unsigned char databuf[1];
-	unsigned char ledstat = 0;
+	unsigned char beepstat = 0;
 	
 	retvalue = copy_from_user(databuf, buf, cnt);
 	if(retvalue < 0) {
-		printk("kernel write failed!\r\n");
+		printk("kernel write faibeep!\r\n");
 		return -EFAULT;
 	}
 
-	ledstat = databuf[0];		/* 获取状态值 */
-	if(ledstat == LED_ON) {
-		led_switch(LED_ON);		/* 打开LED灯 */
-	}else if(ledstat == LED_OFF) {
-		led_switch(LED_OFF);	/* 关闭LED灯 */
+	beepstat = databuf[0];		/* 获取状态值 */
+	if(beepstat == BEEP_ON) {
+		gpio_set_value(beep_dev.beep_pin, 0);	/* 打开蜂鸣器 */
+	}else if(beepstat == BEEP_OFF) {
+		gpio_set_value(beep_dev.beep_pin, 1);	/* 关闭蜂鸣器 */
 	}
 
 	return 0;
 }
 
-static struct file_operations led_fops = {
+static struct file_operations beep_fops = {
 	.owner = THIS_MODULE,
-	.write = led_write,
-	.open = led_open,
+	.write = beep_write,
+	.open = beep_open,
 };
 
+/* MISC设备结构体 */
+static struct miscdevice beep_miscdev = {
+	.minor = MISCBEEP_MINOR,
+	.name = DEVICE_NAME,
+	.fops = &beep_fops,
+};
 
 /** 
- * @brief			: 匹配设备树信息 
+ * @brief			: 读取设备树信息 
  * @description		:
- * 		在不使用platform的情况下，所有的设备树节点nd需要手动读取匹配，
- * 		使用of函数读取。而在使用platform机制的时候，设备树信息读取则
- * 		由Platform机制完成，这里只需要根据节点读取相关信息即可。	
+ * 		仅读取，和修改分离。不使用platform时，设备树节点匹配需要手动调用of函数，
+ * 		查找具体的节点，在Platform中，该部分内容由机制完成，避免代码重复，
+ * 		设备树节点匹配只要在match列表中写出即可，这里的nd参数则是获取到的
+ * 		设备节点信息，在该函数下，利用函数仅获取匹配后设备树节点中的信息即可。
  * @return 			: 0 成功;其他 失败
  */
 static int parse_devtree(struct device_node *nd)
 {
-	/* 将父类指针指向设备父类属性方便访问 */
-	pBase_chr_led = &led_dev.parent;	
-
-	/* 4、 get pin */
-	led_dev.led_pin = of_get_named_gpio(nd, "led-gpio", 0);
-	if(!gpio_is_valid(led_dev.led_pin)) {
-        printk(KERN_ERR "leddev: Failed to get led-gpio\n");
+	/* get pin */
+	beep_dev.beep_pin = of_get_named_gpio(nd, "beep-pin", 0);
+	if(!gpio_is_valid(beep_dev.beep_pin)) {
+        printk(KERN_ERR "beepdev: Failed to get beep-pin\n");
         return -EINVAL;
     }
 
-	printk("led-pin num = %d\r\n", led_dev.led_pin);
+	printk("beep-pin num = %d\r\n", beep_dev.beep_pin);
 
 	return 0;
 }
 
-static int led_pinctrl_init(void)
+/** 
+ * @brief			: 初始化pinctrl中设定信息 
+ * @description		:
+ * 		仅修改，和读取分离。利用gpio子系统初始化已经pinctrl中设置好的节点信息。
+ * 		确保pinctrl信息已经被读入程序。
+ * @return 			: 0 成功;其他 失败
+ */
+static int beep_pinctrl_init(void)
 {
 	int ret;
 
-	/* 5.向gpio子系统申请使用GPIO */
-	ret = gpio_request(led_dev.led_pin, "led0");
+	/* 向gpio子系统申请使用GPIO */
+	ret = gpio_request(beep_dev.beep_pin, "beep0");
     if (ret) {
-        printk(KERN_ERR "led: Failed to request led-pin\n");
+        printk(KERN_ERR "beep: Failed to request beep-pin\n");
         return ret;
 	}
 
-	gpio_direction_output(led_dev.led_pin,1);	
+	gpio_direction_output(beep_dev.beep_pin,1);	
 
 	return 0;
 }
 
-/* 设备属性初始化 */
-static int led_dev_init(void)
+/** 
+ * @brief			: 初始化设备属性 
+ * @description		:
+ * 		初始化设备所有需要的属性，包括电气属性（调用另外的函数）、定时器、
+ * 		中断、自旋锁或者信号量等。
+ * @return 			: 0 成功;其他 失败
+ */
+static int beep_dev_init(struct platform_device *pdev)
 {
 	int ret;
 
-	ret = led_pinctrl_init();
+	/* 读取设备树信息 */
+	ret = parse_devtree(pdev->dev.of_node);
+	if(ret < 0){
+		pr_err("%s Couldn't parse dev-tree, ret=%d\r\n", MODULE_NAME, ret);
+	}
+
+	/* 设置pinctrl信息 */
+	ret = beep_pinctrl_init();
 	if(ret){
-		gpio_free(led_dev.led_pin);
+		gpio_free(beep_dev.beep_pin);
 		return ret;
 	}
 
@@ -204,84 +195,31 @@ static int led_dev_init(void)
  * @param - dev 	: platform设备
  * @return 			: 0，成功;其他负值,失败
  */
-static int led_probe(struct platform_device *pdev)
+static int beep_probe(struct platform_device *pdev)
 {	
 	int ret = 0;
 	
-	printk("led driver and device was matched!\r\n");
+	printk("beep driver and device was matched!\r\n");
 
-	if (devid_major) {		/*  定义了设备号 */
-		module_devid = MKDEV(devid_major, 0); /* 从0开始 */
-		ret = register_chrdev_region(module_devid,DEV_MAX_CNT, MODULE_NAME);
-		if(ret < 0) {
-			pr_err("cannot register %s char driver [ret=%d]\n",MODULE_NAME, 1);
-			
-			/* 该设备号已经使用，返回设备忙*/
-			return -EBUSY;
-		}
-	} else {						/* 没有定义设备号 */
-		ret = alloc_chrdev_region(&module_devid, 0,DEV_MAX_CNT, MODULE_NAME);	
-		if(ret < 0) {
-			pr_err("%s Couldn't alloc_chrdev_region, ret=%d\r\n", MODULE_NAME, ret);
-			
-			/* 动态分配设备号失败，超出内存范围*/
-			return -ENOMEM;
-		}
-		devid_major = MAJOR(module_devid);	
-	}
-	printk("devid_major=%d\r\n",devid_major);	
-
-	led_class = class_create(THIS_MODULE, MODULE_NAME);
-	if (IS_ERR(led_class)) {
-		goto del_unregister;
-	}
-
-	/* 绑定设备信息，仅在绑定成功后初始化设备 */
-	ret = parse_devtree(pdev->dev.of_node);
-	if(ret < 0){
-		pr_err("%s Couldn't parse dev-tree, ret=%d\r\n", MODULE_NAME, ret);
-		goto destroy_class;
-	}
-
-	/* 绑定并初始化特定设备属性 */
-	/* 初始化 LED */
-	//ret = led_gpio_init(pdev->dev.of_node);
-	ret = led_dev_init();
+	ret = beep_dev_init(pdev);
 	if(ret < 0){
 		pr_err("%s Couldn't init property, ret=%d\r\n", MODULE_NAME, ret);
-		goto destroy_class;
 	}
 
-	//pBase_chr_led.dev_prop = &led_dev; 	
-
-	/* 初始化第一个设备信息 */
-	pBase_chr_led->devid_minor = 0;
-	pBase_chr_led->devid = MKDEV(devid_major, pBase_chr_led->devid_minor);
-
-	/* 设置最后一个参数作为设备挂载名称 */
-	snprintf(pBase_chr_led->dev_name, sizeof(pBase_chr_led->dev_name), "led");
-	pBase_chr_led->cdev.owner = THIS_MODULE;
-	cdev_init(&pBase_chr_led->cdev, &led_fops);
-	ret = cdev_add(&pBase_chr_led->cdev, pBase_chr_led->devid, DEV_MAX_CNT);
-	if(ret < 0)
+	/* 一般情况下会注册对应的字符设备，但是这里我们使用MISC设备
+  	 * 所以我们不需要自己注册字符设备驱动，只需要注册misc设备驱动即可
+	 */
+	ret = misc_register(&beep_miscdev);
+	if(ret < 0){
+		printk("misc device register failed!\r\n");
 		goto free_prop;
-		
-	pBase_chr_led->device = device_create(led_class, NULL, pBase_chr_led->devid, NULL, pBase_chr_led->dev_name);
-	if (IS_ERR(pBase_chr_led->device)) {
-		goto del_cdev;
 	}
 	
 	return 0;
 
-del_cdev:
-	cdev_del(&pBase_chr_led->cdev);
+/* 在这里清除所有设备的属性，比如定时器或者释放引脚等 */
 free_prop:
-	gpio_free(led_dev.led_pin);
-destroy_class:
-	class_destroy(led_class);
-del_unregister:
-	unregister_chrdev_region(pBase_chr_led->devid, DEV_MAX_CNT);
-
+	gpio_free(beep_dev.beep_pin);
 	return -EIO;
 }
 
@@ -290,45 +228,46 @@ del_unregister:
  * @param - dev 	: platform设备
  * @return 			: 0，成功;其他负值,失败
  */
-static int led_remove(struct platform_device *dev)
-{
+static int beep_remove(struct platform_device *dev)
+{	
+	/* 注销设备的时候关闭LED灯 */
+	gpio_set_value(beep_dev.beep_pin, 1);
 	
-	cdev_del(&pBase_chr_led->cdev);/*  删除cdev */
-	gpio_set_value(led_dev.led_pin, 1); 	/* 卸载驱动的时候关闭LED */
-	gpio_free(led_dev.led_pin);
-	unregister_chrdev_region(pBase_chr_led->devid, DEV_MAX_CNT); /* 注销设备号 */
-	device_destroy(led_class, pBase_chr_led->devid);
-	class_destroy(led_class);
+	/* 释放BEEP */
+	gpio_free(beep_dev.beep_pin);
+
+	/* 注销misc设备 */
+	misc_deregister(&beep_miscdev);
 	return 0;
 }
 
 /* 匹配列表 */
-static const struct of_device_id led_of_match[] = {
-	{ .compatible = "robert,led" },
+static const struct of_device_id beep_of_match[] = {
+	{ .compatible = "robert,beep" },
 	{ /* Sentinel */ }
 };
 
-MODULE_DEVICE_TABLE(of, led_of_match);
+MODULE_DEVICE_TABLE(of, beep_of_match);
 
 /* platform驱动结构体 */
-static struct platform_driver led_driver = {
+static struct platform_driver beep_driver = {
 	.driver		= {
 		.name	= MODULE_NAME,			/* 驱动名字，用于和设备匹配 */
-		.of_match_table	= led_of_match, 	/* 设备树匹配表 		 */
+		.of_match_table	= beep_of_match, 	/* 设备树匹配表 		 */
 	},
-	.probe		= led_probe,
-	.remove		= led_remove,
+	.probe		= beep_probe,
+	.remove		= beep_remove,
 };
 
 
 static int __init chr_dev_init(void)
 {
-	return platform_driver_register(&led_driver);
+	return platform_driver_register(&beep_driver);
 }
 
 static void __exit chr_dev_exit(void)
 {
-	platform_driver_unregister(&led_driver);
+	platform_driver_unregister(&beep_driver);
 }
 
 module_init(chr_dev_init);
