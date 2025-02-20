@@ -1,0 +1,1 @@
+cmd_/home/robert/share_doc/MyShare/driver_practice/modules/icm20608/icm20608.mod := { echo  /home/robert/share_doc/MyShare/driver_practice/modules/icm20608/icm20608.o; echo; } > /home/robert/share_doc/MyShare/driver_practice/modules/icm20608/icm20608.mod

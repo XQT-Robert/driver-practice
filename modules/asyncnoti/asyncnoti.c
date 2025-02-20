@@ -34,11 +34,11 @@ enum key_status {
     KEY_KEEP,           /* 按键状态保持 */ 
 };
 
-/* 驱动全局属性 */
-struct class *key_class; 			/* 表示当前驱动代表的类型，可复用只创建一个 */
-dev_t module_devid;					/* 驱动模块的设备号，即第一个设备的设备号 */
-int devid_major;					
-int dev_num = 0;					/* 复用当前驱动的设备数，互斥访问 */
+/* 驱动静态全局属性 */
+static struct class *key_class; 			/* 表示当前驱动代表的类型，可复用只创建一个 */
+static dev_t module_devid;					/* 驱动模块的设备号，即第一个设备的设备号 */
+static int devid_major;					
+static int dev_num = 0;					/* 复用当前驱动的设备数，互斥访问 */
 
 
 /* 字符型设备属性 */
@@ -126,24 +126,6 @@ static ssize_t key_write(struct file *filp, const char __user *buf, size_t cnt, 
 	return 0;
 }
 
-/*
- * @description     : poll函数，用于处理非阻塞访问
- * @param - filp    : 要打开的设备文件(文件描述符)
- * @param - wait    : 等待列表(poll_table)
- * @return          : 设备或者资源状态，
- */
-static unsigned int key_poll(struct file *filp, struct poll_table_struct *wait)
-{
-	unsigned int mask = 0;
-
-    poll_wait(filp, &key_dev.r_wait, wait);
-
-    if(KEY_KEEP != atomic_read(&key_dev.status))	// 按键按下或松开动作发生
-		mask = POLLIN | POLLRDNORM;	// 返回PLLIN
-
-    return mask;
-}
-
  /** 
   * @description	: fasync函数，用于处理异步通知
   * @param – fd		: 文件描述符
@@ -173,7 +155,6 @@ static struct file_operations key_fops = {
 	.release = key_release,
 	.write = key_write,
 	.read = key_read,
-	.poll = key_poll,
 	.fasync	= key_fasync,
 };
 

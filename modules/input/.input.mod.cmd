@@ -1,0 +1,1 @@
+cmd_/home/robert/share_doc/MyShare/driver_practice/modules/input/input.mod := { echo  /home/robert/share_doc/MyShare/driver_practice/modules/input/input.o; echo; } > /home/robert/share_doc/MyShare/driver_practice/modules/input/input.mod

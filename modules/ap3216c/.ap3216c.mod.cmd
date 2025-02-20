@@ -1,0 +1,1 @@
+cmd_/home/robert/share_doc/MyShare/driver_practice/modules/ap3216c/ap3216c.mod := { echo  /home/robert/share_doc/MyShare/driver_practice/modules/ap3216c/ap3216c.o; echo; } > /home/robert/share_doc/MyShare/driver_practice/modules/ap3216c/ap3216c.mod

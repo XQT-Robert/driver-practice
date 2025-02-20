@@ -14,7 +14,11 @@
 			"sched.h": "c",
 			"fcntl.h": "c",
 			"types.h": "c",
-			"of_gpio.h": "c"
+			"of_gpio.h": "c",
+			"input.h": "c",
+			"irq.h": "c",
+			"platform_device.h": "c",
+			"consumer.h": "c"
 		}
 	}
 }
